@@ -1,6 +1,10 @@
-# Resource Booking System
+# Resource Booking Management System
 
 A full-stack web application for booking shared resources with automatic conflict detection and buffer time management.
+
+## Live Demo
+
+[Live Demo](https://resource-booking-management.vercel.app/)
 
 ## Features
 
@@ -316,10 +320,6 @@ curl "http://localhost:3000/api/available-slots?resource=Conference%20Room%20A&d
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support, please open an issue in the GitHub repository or contact the development team.
 
 ---
 

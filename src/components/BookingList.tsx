@@ -15,10 +15,15 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sortBy, setSortBy] = useState<"startTime" | "resource" | "status">(
+    "startTime"
+  );
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Filters
   const [selectedResource, setSelectedResource] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
 
   const fetchBookings = async () => {
     try {
@@ -51,14 +56,12 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
   useEffect(() => {
     let filtered = [...bookings];
 
-    // Filter by resource
     if (selectedResource) {
       filtered = filtered.filter(
         (booking) => booking.resource === selectedResource
       );
     }
 
-    // Filter by date
     if (selectedDate) {
       const filterDate = new Date(selectedDate);
       filtered = filtered.filter((booking) => {
@@ -71,8 +74,50 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
       });
     }
 
+    if (selectedStatus) {
+      filtered = filtered.filter(
+        (booking) => booking.status === selectedStatus
+      );
+    }
+
+    // Sort bookings
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortBy) {
+        case "startTime":
+          aValue = new Date(a.startTime).getTime();
+          bValue = new Date(b.startTime).getTime();
+          break;
+        case "resource":
+          aValue = a.resource.toLowerCase();
+          bValue = b.resource.toLowerCase();
+          break;
+        case "status":
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          aValue = new Date(a.startTime).getTime();
+          bValue = new Date(b.startTime).getTime();
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
     setFilteredBookings(filtered);
-  }, [bookings, selectedResource, selectedDate]);
+  }, [
+    bookings,
+    selectedResource,
+    selectedDate,
+    selectedStatus,
+    sortBy,
+    sortOrder,
+  ]);
 
   const handleCancelBooking = async (bookingId: string) => {
     if (!confirm("Are you sure you want to cancel this booking?")) {
@@ -87,7 +132,6 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
       const result = await response.json();
 
       if (result.success) {
-        // Refresh the bookings list
         fetchBookings();
       } else {
         alert(result.error || "Failed to cancel booking");
@@ -97,85 +141,107 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "upcoming":
-        return `${baseClasses} bg-blue-100 text-blue-800`;
+        return "text-blue-600 bg-blue-50";
       case "ongoing":
-        return `${baseClasses} bg-green-100 text-green-800`;
+        return "text-green-600 bg-green-50";
       case "past":
-        return `${baseClasses} bg-gray-100 text-gray-800`;
+        return "text-gray-600 bg-gray-50";
       default:
-        return `${baseClasses} bg-gray-100 text-gray-800`;
+        return "text-gray-600 bg-gray-50";
     }
   };
 
-  const formatDateTime = (dateString: string) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString();
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
-  const groupBookingsByResource = (bookings: BookingWithStatus[]) => {
-    const grouped: { [key: string]: BookingWithStatus[] } = {};
-
-    bookings.forEach((booking) => {
-      if (!grouped[booking.resource]) {
-        grouped[booking.resource] = [];
-      }
-      grouped[booking.resource].push(booking);
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
+  };
 
-    // Sort bookings within each group by start time
-    Object.keys(grouped).forEach((resource) => {
-      grouped[resource].sort(
-        (a, b) =>
-          new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      );
-    });
+  const getDuration = (startTime: string, endTime: string) => {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const durationMs = end.getTime() - start.getTime();
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    return grouped;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const handleSort = (column: "startTime" | "resource" | "status") => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+  };
+
+  const getSortIcon = (column: "startTime" | "resource" | "status") => {
+    if (sortBy !== column) {
+      return <span className="text-gray-300">↕</span>;
+    }
+    return sortOrder === "asc" ? (
+      <span className="text-blue-500">↑</span>
+    ) : (
+      <span className="text-blue-500">↓</span>
+    );
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <div className="text-gray-600">Loading bookings...</div>
+      <div className="flex justify-center items-center py-12">
+        <div className="text-gray-500">Loading bookings...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
         {error}
       </div>
     );
   }
 
-  const groupedBookings = groupBookingsByResource(filteredBookings);
+  const uniqueStatuses = [...new Set(bookings.map((b) => b.status))];
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">
-          Booking Dashboard
-        </h2>
+    <div className="max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Bookings</h1>
+        <p className="text-gray-600">Manage and view all resource bookings</p>
+      </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label
-              htmlFor="resourceFilter"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Filter by Resource
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Resource
             </label>
             <select
-              id="resourceFilter"
               value={selectedResource}
               onChange={(e) => setSelectedResource(e.target.value)}
-              className="w-full text-gray-700 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 text-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Resources</option>
               {RESOURCES.map((resource) => (
@@ -187,97 +253,170 @@ export default function BookingList({ refreshTrigger }: BookingListProps) {
           </div>
 
           <div>
-            <label
-              htmlFor="dateFilter"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Filter by Date
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date
             </label>
             <input
               type="date"
-              id="dateFilter"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-fulltext-gray-700  px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 text-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-        </div>
 
-        {/* Clear Filters */}
-        {(selectedResource || selectedDate) && (
-          <button
-            onClick={() => {
-              setSelectedResource("");
-              setSelectedDate("");
-            }}
-            className="mb-4 text-blue-600 hover:text-blue-800 text-sm"
-          >
-            Clear Filters
-          </button>
-        )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Status
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full border border-gray-300 text-gray-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Statuses</option>
+              {uniqueStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Bookings Count */}
-        <div className="mb-4 text-sm text-gray-600">
-          Showing {filteredBookings.length} of {bookings.length} bookings
+          <div className="flex items-end">
+            {(selectedResource || selectedDate || selectedStatus) && (
+              <button
+                onClick={() => {
+                  setSelectedResource("");
+                  setSelectedDate("");
+                  setSelectedStatus("");
+                }}
+                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Grouped Bookings */}
-      {Object.keys(groupedBookings).length === 0 ? (
-        <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">
-          No bookings found.
-        </div>
-      ) : (
-        Object.entries(groupedBookings).map(([resource, resourceBookings]) => (
-          <div key={resource} className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">
-              {resource}
-            </h3>
-            <div className="space-y-3">
-              {resourceBookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={getStatusBadge(booking.status)}>
-                          {booking.status.charAt(0).toUpperCase() +
-                            booking.status.slice(1)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <p>
-                          <strong>Time:</strong>{" "}
-                          {formatDateTime(booking.startTime)} -{" "}
-                          {formatDateTime(booking.endTime)}
-                        </p>
-                        <p>
-                          <strong>Requested by:</strong> {booking.requestedBy}
-                        </p>
-                        <p>
-                          <strong>Created:</strong>{" "}
-                          {formatDateTime(booking.createdAt)}
-                        </p>
-                      </div>
-                    </div>
+      {/* Results count */}
+      <div className="mb-4">
+        <span className="text-sm text-gray-600">
+          Showing {filteredBookings.length} of {bookings.length} bookings
+        </span>
+      </div>
 
+      {/* Table */}
+      <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort("resource")}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Resource</span>
+                  {getSortIcon("resource")}
+                </div>
+              </th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort("startTime")}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Date</span>
+                  {getSortIcon("startTime")}
+                </div>
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                Time
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                Duration
+              </th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort("status")}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Status</span>
+                  {getSortIcon("status")}
+                </div>
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                Requested By
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredBookings.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-6 py-12 text-center text-gray-500"
+                >
+                  No bookings found
+                </td>
+              </tr>
+            ) : (
+              filteredBookings.map((booking) => (
+                <tr key={booking.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {booking.resource}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {formatDate(booking.startTime)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {formatTime(booking.startTime)} -{" "}
+                      {formatTime(booking.endTime)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {getDuration(booking.startTime, booking.endTime)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                        booking.status
+                      )}`}
+                    >
+                      {booking.status.charAt(0).toUpperCase() +
+                        booking.status.slice(1)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {booking.requestedBy}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     {booking.status === "upcoming" && (
                       <button
                         onClick={() => handleCancelBooking(booking.id)}
-                        className="ml-4 px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="text-sm text-red-600 hover:text-red-800 font-medium"
                       >
                         Cancel
                       </button>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
